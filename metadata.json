@@ -1,0 +1,5 @@
+{
+  "name": "GitZip AI Deployer",
+  "description": "Upload a ZIP file, automatically unzip it, generate a repository description using Gemini AI, and deploy directly to a new GitHub repository.",
+  "requestFramePermissions": []
+}

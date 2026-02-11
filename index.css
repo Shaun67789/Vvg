@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #09090b; /* Zinc 950 */
+  color: #e4e4e7; /* Zinc 200 */
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-zinc-900/50 backdrop-blur-md border border-zinc-800 shadow-xl;
+  }
+}
