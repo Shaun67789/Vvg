@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Github, Upload, FolderArchive, ArrowRight, Loader2, Wand2, 
-  Terminal, CheckCircle, ShieldCheck, FileText, Lock, Globe 
+  Terminal, CheckCircle, ShieldCheck, FileText, Lock, Globe, Eye, Edit
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
+import ReactMarkdown from 'react-markdown';
+import confetti from 'canvas-confetti';
+
 import { Steps } from './components/Steps';
 import { Step, UserProfile, FileNode, RepoConfig, LogEntry } from './types';
 import { githubService } from './services/githubService';
@@ -19,6 +22,7 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [files, setFiles] = useState<FileNode[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [readmeMode, setReadmeMode] = useState<'edit' | 'preview'>('preview');
   
   // Config State
   const [repoConfig, setRepoConfig] = useState<RepoConfig>({
@@ -40,6 +44,37 @@ const App: React.FC = () => {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs]);
+
+  // Trigger confetti on success
+  useEffect(() => {
+    if (step === Step.SUCCESS) {
+      const duration = 3 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+      const interval: any = setInterval(function() {
+        const timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+
+        const particleCount = 50 * (timeLeft / duration);
+        confetti({
+          ...defaults, particleCount,
+          origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+        });
+        confetti({
+          ...defaults, particleCount,
+          origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+        });
+      }, 250);
+
+      return () => clearInterval(interval);
+    }
+  }, [step]);
 
   const addLog = (message: string, type: LogEntry['type'] = 'info') => {
     setLogs(prev => [...prev, { message, type, timestamp: Date.now() }]);
@@ -93,6 +128,8 @@ const App: React.FC = () => {
         name: baseName,
         readmeContent: `# ${baseName}\n\nAutomated deployment via GitZip AI.`
       }));
+      // Auto-switch to edit mode initially
+      setReadmeMode('edit');
 
     } catch (err) {
       console.error(err);
@@ -113,6 +150,7 @@ const App: React.FC = () => {
         description: suggestion.description || prev.description,
         readmeContent: suggestion.readmeContent || prev.readmeContent
       }));
+      setReadmeMode('preview');
     } catch (err) {
       setError("AI Generation failed. Check API Key configuration.");
     } finally {
@@ -177,27 +215,35 @@ const App: React.FC = () => {
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500"></div>
       
       <div className="flex flex-col items-center gap-4 mb-8">
-        <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center border border-zinc-700 shadow-inner">
-          <ShieldCheck className="w-8 h-8 text-cyan-400" />
+        <div className="relative">
+          <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center border border-zinc-700 shadow-inner">
+            <ShieldCheck className="w-8 h-8 text-cyan-400" />
+          </div>
+          {isVerifying && (
+            <span className="absolute -top-1 -right-1 flex h-4 w-4">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-cyan-500"></span>
+            </span>
+          )}
         </div>
-        <h2 className="text-2xl font-bold text-white tracking-tight">GitHub Verification</h2>
+        <h2 className="text-2xl font-bold text-white tracking-tight">GitHub Access</h2>
         <p className="text-zinc-400 text-center text-sm leading-relaxed">
-          To ensure security, please provide a Personal Access Token with <code className="bg-zinc-800 px-1 py-0.5 rounded text-cyan-300">repo</code> scope.
+          Provide a secure token to allow GitZip to create repositories on your behalf.
         </p>
       </div>
 
       <div className="space-y-5">
         <div>
           <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Personal Access Token</label>
-          <div className="relative">
+          <div className="relative group">
             <input 
               type="password" 
               value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder="ghp_..."
-              className="w-full bg-zinc-950 border border-zinc-800 text-white px-4 py-3.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all placeholder-zinc-700 font-mono text-sm"
+              className="w-full bg-zinc-950 border border-zinc-800 text-white px-4 py-3.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all placeholder-zinc-700 font-mono text-sm group-hover:border-zinc-700"
             />
-            <div className="absolute right-3 top-3.5 text-zinc-600">
+            <div className="absolute right-3 top-3.5 text-zinc-600 group-hover:text-zinc-400 transition-colors">
                <Lock size={16} />
             </div>
           </div>
@@ -217,15 +263,15 @@ const App: React.FC = () => {
         <button 
           onClick={handleVerifyAndConnect}
           disabled={!token || isVerifying}
-          className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-white/5"
+          className="w-full bg-white text-black hover:bg-zinc-200 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-white/5 active:scale-[0.98]"
         >
-          {isVerifying ? <Loader2 className="animate-spin" /> : 'Verify & Connect'}
+          {isVerifying ? <Loader2 className="animate-spin" /> : 'Verify Token'}
         </button>
       </div>
       
       <div className="mt-6 text-center">
          <a href="https://github.com/settings/tokens/new?scopes=repo&description=GitZip+AI+Deployer" target="_blank" rel="noreferrer" className="text-cyan-500 text-xs hover:text-cyan-400 transition-colors flex items-center justify-center gap-1">
-            Generate Token <ArrowRight size={10} />
+            Create new token <ArrowRight size={10} />
          </a>
       </div>
     </motion.div>
@@ -236,15 +282,15 @@ const App: React.FC = () => {
       initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
       className="glass-panel p-10 rounded-2xl max-w-xl w-full text-center relative"
     >
-      <h2 className="text-2xl font-bold text-white mb-2">Project Source</h2>
-      <p className="text-zinc-400 text-sm mb-8">Upload your source code archive to begin analysis.</p>
+      <h2 className="text-2xl font-bold text-white mb-2">Upload Source</h2>
+      <p className="text-zinc-400 text-sm mb-8">Drop your project archive to begin the deployment pipeline.</p>
       
       <label className="group flex flex-col items-center justify-center w-full h-72 border-2 border-dashed border-zinc-700 rounded-2xl cursor-pointer bg-zinc-900/30 hover:bg-zinc-800/50 hover:border-cyan-500/50 transition-all duration-300">
         <div className="flex flex-col items-center justify-center pt-5 pb-6">
           <div className="p-5 bg-zinc-800 rounded-full mb-6 group-hover:scale-110 transition-transform duration-300 shadow-xl shadow-black/50">
              <FolderArchive className="w-12 h-12 text-cyan-400" />
           </div>
-          <p className="mb-2 text-lg text-zinc-200 font-medium group-hover:text-white">Drop your ZIP file here</p>
+          <p className="mb-2 text-lg text-zinc-200 font-medium group-hover:text-white">Drag & Drop ZIP file</p>
           <p className="text-sm text-zinc-500">Supports .zip, .rar, .7z</p>
         </div>
         <input type="file" className="hidden" onChange={handleFileUpload} accept=".zip,.rar,.7z,*" />
@@ -253,7 +299,7 @@ const App: React.FC = () => {
       {isProcessing && (
         <div className="mt-6 flex items-center justify-center gap-3 text-cyan-400 bg-cyan-950/20 py-2 rounded-lg border border-cyan-900/30">
           <Loader2 className="animate-spin" size={20} />
-          <span className="text-sm font-medium">Extracting and analyzing...</span>
+          <span className="text-sm font-medium">Analyzing package contents...</span>
         </div>
       )}
       
@@ -264,14 +310,14 @@ const App: React.FC = () => {
   const renderConfig = () => (
     <motion.div 
       initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-      className="glass-panel p-8 rounded-2xl max-w-4xl w-full grid grid-cols-1 lg:grid-cols-3 gap-8"
+      className="glass-panel p-8 rounded-2xl max-w-5xl w-full grid grid-cols-1 lg:grid-cols-3 gap-8"
     >
       {/* Left Column: Form */}
       <div className="lg:col-span-2 space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-bold text-white">Configuration</h2>
-            <p className="text-zinc-400 text-sm">Customize your repository settings.</p>
+            <h2 className="text-2xl font-bold text-white">Project Config</h2>
+            <p className="text-zinc-400 text-sm">Review generated settings.</p>
           </div>
           <button 
             onClick={handleAiGenerate}
@@ -279,7 +325,7 @@ const App: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-500 hover:to-indigo-500 transition-all text-sm font-medium shadow-lg shadow-purple-900/20"
           >
             {isProcessing ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
-            AI Magic Fill
+            AI Enhance
           </button>
         </div>
 
@@ -291,7 +337,8 @@ const App: React.FC = () => {
                 type="text" 
                 value={repoConfig.name}
                 onChange={(e) => setRepoConfig({...repoConfig, name: e.target.value})}
-                className="w-full bg-zinc-950 border border-zinc-800 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                className="w-full bg-zinc-950 border border-zinc-800 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder-zinc-700"
+                placeholder="my-awesome-project"
               />
             </div>
             <div className="col-span-2 sm:col-span-1">
@@ -319,29 +366,59 @@ const App: React.FC = () => {
               type="text" 
               value={repoConfig.description}
               onChange={(e) => setRepoConfig({...repoConfig, description: e.target.value})}
-              className="w-full bg-zinc-950 border border-zinc-800 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-              placeholder="Project description..."
+              className="w-full bg-zinc-950 border border-zinc-800 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder-zinc-700"
+              placeholder="A brief description of your project..."
             />
           </div>
 
-          <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
-             <div className="flex items-center gap-3 mb-3">
-                <input 
-                  type="checkbox" 
-                  id="readme"
-                  checked={repoConfig.includeReadme}
-                  onChange={(e) => setRepoConfig({...repoConfig, includeReadme: e.target.checked})}
-                  className="w-4 h-4 bg-zinc-950 border-zinc-700 rounded focus:ring-cyan-500 text-cyan-600"
-                />
-                <label htmlFor="readme" className="text-zinc-300 text-sm font-medium cursor-pointer select-none">Generate README.md</label>
+          <div className="bg-zinc-900/50 rounded-xl border border-zinc-800/50 overflow-hidden flex flex-col h-96">
+             <div className="p-3 bg-zinc-900/80 border-b border-zinc-800 flex justify-between items-center">
+                 <div className="flex items-center gap-3">
+                    <input 
+                      type="checkbox" 
+                      id="readme"
+                      checked={repoConfig.includeReadme}
+                      onChange={(e) => setRepoConfig({...repoConfig, includeReadme: e.target.checked})}
+                      className="w-4 h-4 bg-zinc-950 border-zinc-700 rounded focus:ring-cyan-500 text-cyan-600"
+                    />
+                    <label htmlFor="readme" className="text-zinc-300 text-sm font-medium cursor-pointer select-none">README.md</label>
+                 </div>
+                 
+                 {repoConfig.includeReadme && (
+                   <div className="flex bg-zinc-950 rounded-lg p-0.5 border border-zinc-800">
+                      <button 
+                        onClick={() => setReadmeMode('edit')}
+                        className={clsx("p-1.5 rounded transition-all", readmeMode === 'edit' ? 'bg-zinc-800 text-cyan-400' : 'text-zinc-500 hover:text-zinc-300')}
+                        title="Edit Markdown"
+                      >
+                        <Edit size={14} />
+                      </button>
+                      <button 
+                        onClick={() => setReadmeMode('preview')}
+                        className={clsx("p-1.5 rounded transition-all", readmeMode === 'preview' ? 'bg-zinc-800 text-cyan-400' : 'text-zinc-500 hover:text-zinc-300')}
+                        title="Preview"
+                      >
+                        <Eye size={14} />
+                      </button>
+                   </div>
+                 )}
              </div>
+             
              {repoConfig.includeReadme && (
-                <textarea 
-                    value={repoConfig.readmeContent}
-                    onChange={(e) => setRepoConfig({...repoConfig, readmeContent: e.target.value})}
-                    rows={8}
-                    className="w-full bg-zinc-950 border border-zinc-800 text-zinc-300 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500/50 font-mono text-xs leading-relaxed resize-none"
-                />
+                <div className="flex-1 overflow-hidden relative">
+                  {readmeMode === 'edit' ? (
+                    <textarea 
+                        value={repoConfig.readmeContent}
+                        onChange={(e) => setRepoConfig({...repoConfig, readmeContent: e.target.value})}
+                        className="w-full h-full bg-zinc-950 text-zinc-300 p-4 focus:outline-none font-mono text-xs leading-relaxed resize-none custom-scrollbar"
+                        placeholder="# Project Title..."
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-zinc-950 text-zinc-300 p-4 overflow-y-auto prose prose-invert prose-sm max-w-none custom-scrollbar">
+                       <ReactMarkdown>{repoConfig.readmeContent || '*No content*'}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
              )}
           </div>
         </div>
@@ -350,38 +427,39 @@ const App: React.FC = () => {
       {/* Right Column: File Preview */}
       <div className="lg:col-span-1 bg-zinc-950 rounded-xl border border-zinc-800 p-4 flex flex-col h-full">
          <h3 className="text-sm font-semibold text-zinc-400 mb-3 flex items-center gap-2">
-           <FileText size={14} /> File Structure Preview
+           <FileText size={14} /> Files ({files.length})
          </h3>
-         <div className="flex-1 overflow-y-auto space-y-1 pr-2 custom-scrollbar max-h-[500px]">
+         <div className="flex-1 overflow-y-auto space-y-1 pr-2 custom-scrollbar max-h-[550px]">
             {files.slice(0, 100).map((f, i) => (
-              <div key={i} className="text-xs text-zinc-500 font-mono truncate flex items-center gap-2 py-0.5">
-                 <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
+              <div key={i} className="text-xs text-zinc-500 font-mono truncate flex items-center gap-2 py-1 px-2 hover:bg-zinc-900 rounded group transition-colors">
+                 <span className="w-1.5 h-1.5 bg-zinc-700 rounded-full group-hover:bg-cyan-500 transition-colors"></span>
                  {f.path}
+                 <span className="ml-auto text-[10px] text-zinc-700">{(f.size / 1024).toFixed(1)}kb</span>
               </div>
             ))}
             {files.length > 100 && (
-              <div className="text-xs text-zinc-600 italic pl-3">...and {files.length - 100} more</div>
+              <div className="text-xs text-zinc-600 italic pl-3 py-2">...and {files.length - 100} more</div>
             )}
          </div>
-         <div className="mt-4 pt-4 border-t border-zinc-800 text-xs text-zinc-500 flex justify-between">
-            <span>Total Files:</span>
-            <span className="text-zinc-300">{files.length}</span>
+         <div className="mt-4 pt-4 border-t border-zinc-800 text-xs text-zinc-500 flex justify-between items-center">
+            <span>Total Size:</span>
+            <span className="text-zinc-300 font-mono">{(files.reduce((a, b) => a + b.size, 0) / 1024 / 1024).toFixed(2)} MB</span>
          </div>
       </div>
 
       <div className="lg:col-span-3 flex justify-between items-center pt-4 border-t border-zinc-800">
         <button 
           onClick={() => setStep(Step.UPLOAD)}
-          className="text-zinc-500 hover:text-white transition-colors text-sm font-medium px-4"
+          className="text-zinc-500 hover:text-white transition-colors text-sm font-medium px-4 flex items-center gap-2"
         >
-          &larr; Back to Upload
+          <ArrowRight size={14} className="rotate-180" /> Back
         </button>
         <button 
           onClick={handleDeploy}
           disabled={!repoConfig.name}
-          className="bg-white text-black hover:bg-zinc-200 font-bold px-8 py-3 rounded-lg shadow-lg shadow-white/10 transition-all flex items-center gap-2"
+          className="bg-white text-black hover:bg-zinc-200 font-bold px-8 py-3 rounded-lg shadow-lg shadow-white/10 transition-all flex items-center gap-2 active:scale-[0.98]"
         >
-          Deploy Project <ArrowRight size={18} />
+          Deploy Repository <ArrowRight size={18} />
         </button>
       </div>
     </motion.div>
@@ -394,7 +472,7 @@ const App: React.FC = () => {
     >
       <div className="bg-zinc-900/80 p-6 border-b border-zinc-800 flex items-center gap-4">
         {step === Step.SUCCESS ? (
-           <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center border border-green-500/30">
+           <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center border border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.3)]">
              <CheckCircle className="text-green-400" size={24} />
            </div>
         ) : (
@@ -404,17 +482,18 @@ const App: React.FC = () => {
         )}
         <div>
           <h2 className="text-xl font-bold text-white">
-            {step === Step.SUCCESS ? 'Deployed Successfully' : 'Deploying to GitHub'}
+            {step === Step.SUCCESS ? 'Mission Accomplished' : 'Deploying to GitHub'}
           </h2>
           <p className="text-zinc-400 text-sm">
-             {step === Step.SUCCESS ? 'Your project is live and ready.' : 'Please wait while we push your code.'}
+             {step === Step.SUCCESS ? 'Your repository is live and ready for action.' : 'Synchronizing files and creating git objects...'}
           </p>
         </div>
       </div>
 
-      <div className="bg-black p-6 font-mono text-sm h-80 overflow-y-auto flex flex-col gap-2">
+      <div className="bg-black p-6 font-mono text-sm h-80 overflow-y-auto flex flex-col gap-2 relative">
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,_transparent_0%,_rgba(0,0,0,0.8)_100%)]"></div>
         {logs.map((log, idx) => (
-          <div key={idx} className={clsx("flex gap-3", {
+          <div key={idx} className={clsx("flex gap-3 relative z-10", {
             'text-red-400': log.type === 'error',
             'text-green-400': log.type === 'success',
             'text-zinc-400': log.type === 'info',
@@ -432,15 +511,15 @@ const App: React.FC = () => {
 
       {step === Step.SUCCESS && deployUrl && (
         <div className="p-6 bg-zinc-900 border-t border-zinc-800 flex flex-col gap-4">
-           <div className="flex items-center gap-4 p-4 bg-zinc-950 border border-zinc-800 rounded-xl">
+           <div className="flex items-center gap-4 p-4 bg-zinc-950 border border-zinc-800 rounded-xl hover:border-zinc-700 transition-colors">
               <Github size={24} className="text-white" />
               <div className="flex-1 overflow-hidden">
-                <p className="text-zinc-400 text-xs">Repository URL</p>
+                <p className="text-zinc-400 text-xs uppercase tracking-wider font-semibold">Repository URL</p>
                 <a href={deployUrl} target="_blank" rel="noreferrer" className="text-cyan-400 hover:text-cyan-300 font-medium truncate block">
                   {deployUrl}
                 </a>
               </div>
-              <a href={deployUrl} target="_blank" rel="noreferrer" className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-sm rounded-lg transition-colors">
+              <a href={deployUrl} target="_blank" rel="noreferrer" className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-sm rounded-lg transition-colors border border-zinc-700">
                 Open
               </a>
            </div>
@@ -452,7 +531,7 @@ const App: React.FC = () => {
                setLogs([]);
                setRepoConfig({ name: '', description: '', isPrivate: false, includeReadme: true, readmeContent: '' });
              }}
-             className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-zinc-200 transition-colors"
+             className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-zinc-200 transition-colors shadow-lg shadow-white/5 active:scale-[0.98]"
            >
              Deploy Another Project
            </button>

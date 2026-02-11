@@ -2,7 +2,11 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, (process as any).cwd(), '');
+  // Ensure we use process.cwd() for loading env files. 
+  // Cast to any to avoid "Property 'cwd' does not exist on type 'Process'" error if node types are not strictly configured.
+  const cwd = (process as any).cwd();
+  const env = loadEnv(mode, cwd, '');
+  
   return {
     plugins: [react()],
     define: {
